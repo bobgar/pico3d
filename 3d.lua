@@ -20,21 +20,15 @@ function _init()
     initlevel()
 
     copy_sprites_to_map(1,0, 8, 4, 0, 0)
-    -- copy_sprites_to_map(1,0, 4, 4, 4, 0)
-    -- copy_sprites_to_map(1,0, 4, 4, 8, 0)
-    -- copy_sprites_to_map(1,0, 4, 4, 12, 0)
-    -- copy_sprites_to_map(1,0, 4, 4, 0, 4)
-    -- copy_sprites_to_map(1,0, 4, 4, 4, 4)
-    -- copy_sprites_to_map(1,0, 4, 4, 8, 4)
-    -- copy_sprites_to_map(1,0, 4, 4, 12, 4)
-    -- copy_sprites_to_map(1,0, 4, 4, 0, 8)
-    -- copy_sprites_to_map(1,0, 4, 4, 4, 8)
-    -- copy_sprites_to_map(1,0, 4, 4, 8, 8)
-    -- copy_sprites_to_map(1,0, 4, 4, 12, 8)
-    -- copy_sprites_to_map(1,0, 4, 4, 0, 12)
-    -- copy_sprites_to_map(1,0, 4, 4, 4, 12)
-    -- copy_sprites_to_map(1,0, 4, 4, 8, 12)
-    -- copy_sprites_to_map(1,0, 4, 4, 12, 12)
+    shipx=0
+    shipy=0
+    shipz=0
+    playerpoints = {
+        {x=-15, y=60, z=1},
+        {x=15, y=60, z=1},
+        {x=0, y=50, z=1},
+        {x=0, y=60, z=1.5},
+    }
 end
 
 function initlevel()
@@ -57,10 +51,14 @@ function initlevel()
 end
 
 function _update()
-    if btn(⬆️) then vy+= speed  end
-    if btn(⬇️) then vy-= speed  end
-    if btn(➡️) then vx-= speed  end
-    if btn(⬅️) then vx+= speed end
+    --if btn(⬆️) then vy+= speed  end
+    -- if btn(⬇️) then vy-= speed  end
+    if btn(➡️) then vx-= speed/2.0  end
+    if btn(⬅️) then vx+= speed/2.0 end
+    if btnp(⬆️) then shipy-= speed*10  end
+    if btnp(⬇️) then shipy+= speed*10  end
+    if btn(➡️) then shipx+= speed*10  end
+    if btn(⬅️) then shipx-= speed*10 end
     px+=vx
     py+=vy
     vx*=damp
@@ -89,6 +87,11 @@ function _draw()
             end
         end
     end
+    
+    --right now always draw the player last (may change)
+    
+    drawplayer()
+
     color(0)
     print("FPS: " .. stat(7), 80,100)
     print("CPU: " .. stat(1), 80,108)
@@ -210,4 +213,25 @@ function drawcubemids(x,y,iz, c)
         qfill_ccw(px2, py1, px4, py3, px3, py3, px1, py1)
         --qtex_map(px2, py1, px4, py3, px3, py3, px1, py1, 0, 0, 4, 4, 1, 1)  
     end
+end
+
+function drawplayer()
+    
+    local p1x = (playerpoints[1].x+shipx) / playerpoints[1].z + 64 + px
+    local p1y = (playerpoints[1].y+shipy) / playerpoints[1].z + 64 + py
+    local p2x = (playerpoints[2].x+shipx) / playerpoints[2].z + 64 + px
+    local p2y = (playerpoints[2].y+shipy) / playerpoints[2].z + 64 + py
+    local p3x = (playerpoints[3].x+shipx) / playerpoints[3].z + 64 + px
+    local p3y = (playerpoints[3].y+shipy) / playerpoints[3].z + 64 + py
+    local p4x = (playerpoints[4].x+shipx) / playerpoints[4].z + 64 + px
+    local p4y = (playerpoints[4].y+shipy) / playerpoints[4].z + 64 + py
+
+    --for right now take the most naive appproachh
+    color(3)
+    tri_ultra(p1x, p1y , p3x,p3y, p4x,p4y)
+    tri_ultra(p2x, p2y , p3x,p3y, p4x,p4y)
+
+    color(11)
+    --back
+    tri_ultra(p1x, p1y , p2x,p2y, p3x,p3y)
 end
