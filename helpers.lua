@@ -1,197 +1,3 @@
-function qfill(x1,y1, x2,y2, x3,y3, x4,y4)
-  -- localize globals for speed
-  local flr,rectfill,max,min = flr,rectfill,max,min
-
-  -- pack coords
-  local xs={x1,x2,x3,x4}
-  local ys={y1,y2,y3,y4}
-
-  -- helpers
-  local function ceil(a) return -flr(-a) end
-  local function inc(i) i+=1 if i>4 then i=1 end return i end
-  local function dec(i) i-=1 if i<1 then i=4 end return i end
-
-  -- find top (min y) and bottom (max y) vertices
-  local top=1 bottom=1
-  for i=2,4 do
-    if ys[i]<ys[top] then top=i end
-    if ys[i]>ys[bottom] then bottom=i end
-  end
-  if ys[top]==ys[bottom] then return end -- totally flat or degenerate
-
-  -- build the two edge chains from top->bottom:
-  -- forward goes top, top+1, ... until bottom
-  -- backward goes top, top-1, ... until bottom
-  local f0=top
-  local f1=inc(f0)
-  -- advance until we hit bottom
-  while f1~=bottom do f0=f1; f1=inc(f1) end
-  -- at this point, forward chain is: top -> ... -> bottom (implicit)
-
-  local b0=top
-  local b1=dec(b0)
-  while b1~=bottom do b0=b1; b1=dec(b1) end
-  -- backward chain is: top -> ... -> bottom (implicit)
-
-  -- edge walker constructor for segment a->b (assumes ay!=by)
-  -- returns {y0,y1,x,dxdy} with y clipped to [0..127]
-  local function mkedge(a,b)
-    local ax,ay=xs[a],ys[a]
-    local bx,by=xs[b],ys[b]
-    if ay>by then
-      -- enforce a above b
-      ax,ay,bx,by = bx,by,ax,ay
-    end
-    if ay==by then return nil end
-
-    local y0=ceil(ay)
-    local y1=ceil(by)-1
-    -- clip to screen y
-    if y1<0 or y0>127 then return nil end
-    if y0<0 then y0=0 end
-    if y1>127 then y1=127 end
-    if y0>y1 then return nil end
-
-    local dxdy=(bx-ax)/(by-ay)
-    local x=ax + dxdy*(y0 - ay)
-    return {y0=y0,y1=y1,x=x,dxdy=dxdy}
-  end
-
-  -- make first segments on each chain (from top downward)
-  local eL = mkedge(top, inc(top))
-  local eR = mkedge(top, dec(top))
-
-  -- either chain could start with a horizontal edge; skip ahead if so
-  local iL = inc(top)
-  while not eL and iL~=bottom do
-    local next_i = inc(iL)
-    eL = mkedge(iL, next_i)
-    iL = next_i
-  end
-
-  local iR = dec(top)
-  while not eR and iR~=bottom do
-    local next_i = dec(iR)
-    eR = mkedge(iR, next_i)
-    iR = next_i
-  end
-
-  if not eL or not eR then return end
-
-  -- decide which chain is actually left/right at the first active scanline
-  local ystart = max(eL.y0, eR.y0)
-  if ystart>eL.y0 then eL.x = eL.x + eL.dxdy*(ystart - eL.y0); eL.y0=ystart end
-  if ystart>eR.y0 then eR.x = eR.x + eR.dxdy*(ystart - eR.y0); eR.y0=ystart end
-  if eL.x>eR.x then eL,eR = eR,eL end
-
-  -- draw until both chains finish
-  while eL and eR do
-    local y0  = max(eL.y0, eR.y0)
-    local y1  = min(eL.y1, eR.y1)
-    if y0<=y1 then
-      -- advance x to y0 (if an edge started higher)
-      -- (after first segment this is usually a no-op)
-      -- half-pixel bias rounding
-      for y=y0,y1 do
-        local xl = flr(eL.x+0.5)
-        local xr = flr(eR.x+0.5)
-        -- clip span to screen x
-        if xr>=0 and xl<=127 then
-          if xl<0 then xl=0 end
-          if xr>127 then xr=127 end
-          if xr>=xl then rectfill(xl,y,xr,y) end
-        end
-        eL.x += eL.dxdy
-        eR.x += eR.dxdy
-      end
-    end
-
-    -- advance whichever edge ended at y1
-    local ended_left  = (not eR) or (eL and y1>=eL.y1)
-    local ended_right = (not eL) or (eR and y1>=eR.y1)
-
-    if ended_left then
-      -- move to next segment on left chain
-      if iL~=bottom then
-        local next_i = inc(iL)
-        eL = mkedge(iL, next_i)
-        iL = next_i
-        -- align to next scanline
-        if eL and y1+1>eL.y0 then
-          eL.x = eL.x + eL.dxdy*((y1+1)-eL.y0)
-          eL.y0 = y1+1
-        end
-      else
-        eL=nil
-      end
-    end
-
-    if ended_right then
-      -- move to next segment on right chain
-      if iR~=bottom then
-        local next_i = dec(iR)
-        eR = mkedge(iR, next_i)
-        iR = next_i
-        if eR and y1+1>eR.y0 then
-          eR.x = eR.x + eR.dxdy*((y1+1)-eR.y0)
-          eR.y0 = y1+1
-        end
-      else
-        eR=nil
-      end
-    end
-
-    -- keep chains as left/right for the next scan block
-    if eL and eR and eL.x>eR.x then eL,eR = eR,eL end
-  end
-end
-
-
---triangle
-
-function trifill(x1, y1, x2, y2, x3, y3, col)
-  if col != nil then color(col) end
-  -- Sort points by y-coordinate (p1.y <= p2.y <= p3.y)
-  if y1 > y2 then x1, y1, x2, y2 = x2, y2, x1, y1 end
-  if y1 > y3 then x1, y1, x3, y3 = x3, y3, x1, y1 end
-  if y2 > y3 then x2, y2, x3, y3 = x3, y3, x2, y2 end
-  
-  -- Check for flat-top or flat-bottom cases
-  if y1 == y2 then -- Flat-top triangle
-    fill_flat_top(x1, y1, x2, y2, x3, y3)
-  elseif y2 == y3 then -- Flat-bottom triangle
-    fill_flat_bottom(x1, y1, x2, y2, x3, y3)
-  else -- General case, split into two triangles
-    local x4 = x1 + (x3 - x1) * (y2 - y1) / (y3 - y1)
-    fill_flat_bottom(x1, y1, x4, y2, x2, y2)
-    fill_flat_top(x2, y2, x4, y2, x3, y3)
-  end
-end
-
-function fill_flat_bottom(x1, y1, x2, y2, x3, y3)
-  local invslope1 = (x2 - x1) / (y2 - y1)
-  local invslope2 = (x3 - x1) / (y3 - y1)
-  local curx1 = x1
-  local curx2 = x1
-  for scanline = y1, y2 do
-    line(curx1, scanline, curx2, scanline)
-    curx1 += invslope1
-    curx2 += invslope2
-  end
-end
-
-function fill_flat_top(x1, y1, x2, y2, x3, y3)
-  local invslope1 = (x3 - x1) / (y3 - y1)
-  local invslope2 = (x3 - x2) / (y3 - y2)
-  local curx1 = x3
-  local curx2 = x3
-  for scanline = y3, y1, -1 do
-    line(curx1, scanline, curx2, scanline)
-    curx1 -= invslope1
-    curx2 -= invslope2
-  end
-end
-
 
 --trifill fast
 -- ultra-lite ceil (faster than -flr(-x) in practice on pico-8)
@@ -199,32 +5,6 @@ local function ceil(x)
   local i=flr(x)
   if x>i then i+=1 end
   return i
-end
-
--- draw spans y0..y1 (inclusive) with running xL/xR and per-scan slopes
--- expects: y0<=y1 and y already clipped to [0..127]
-local function _scan(y0,y1, xl, xr, dxl, dxr)
-  -- align to first y if the caller started earlier
-  local y = y0
-  if y<0 then
-    local adv = -y
-    xl += dxl*adv
-    xr += dxr*adv
-    y = 0
-  end
-  if y1>127 then y1=127 end
-  for yy=y,y1 do
-    -- clip span in x just once per scan (branch is cheap, saves line work)
-    local l = flr(xl+0.5)
-    local r = flr(xr+0.5)
-    if r>=0 and l<=127 then
-      if l<0 then l=0 end
-      if r>127 then r=127 end
-      if r>=l then rectfill(l,yy,r,yy) end
-    end
-    xl += dxl
-    xr += dxr
-  end
 end
 
 -- backface (optional): skip if screen-space area <= 0 (CW)
@@ -257,9 +37,6 @@ end
 -- triangle fill (solid). uses current pen.
 -- order doesn't matter; we sort by y.
 function tri_ultra(x1,y1,x2,y2,x3,y3)
-  -- localize hot globals
-  local rectfill = rectfill
-
   -- sort by y: y1<=y2<=y3
   if y1>y2 then x1,y1,x2,y2=x2,y2,x1,y1 end
   if y1>y3 then x1,y1,x3,y3=x3,y3,x1,y1 end
@@ -392,3 +169,392 @@ function tri_ultra(x1,y1,x2,y2,x3,y3)
     end
   end
 end
+
+-------------------------------------------------------
+
+function copy_sprites_to_map(tx_tile,ty_tile, tw,th, mx,my)  
+  for j=0,th-1 do
+    for i=0,tw-1 do
+      -- set map cell to sprite index
+      mset(mx+i, my+j, tx_tile+i + ty_tile+j*16)
+    end
+  end
+end
+
+--------------------------------------------------------
+function tri_tex_persp_fast(
+  x1,y1,z1,u1,v1,
+  x2,y2,z2,u2,v2,
+  x3,y3,z3,u3,v3,
+  mx,my, tw,th, ru,rv, chunk_max, eps
+)
+  -- defaults
+  tw,th      = tw or 4, th or 4          -- 32x32
+  ru,rv      = ru or 1, rv or 1          -- stretch (<=1 zooms in)
+  chunk_max  = chunk_max or 16           -- max px per tline segment
+  eps        = eps or 0.03               -- ~3% w variation per chunk
+
+  -- scale UV once (repeat via pre-tiling in map for speed)
+  u1,u2,u3 = u1*ru, u2*ru, u3*ru
+  v1,v2,v3 = v1*rv, v2*rv, v3*rv
+
+  -- sort by y
+  if y1>y2 then x1,y1,z1,u1,v1,x2,y2,z2,u2,v2 = x2,y2,z2,u2,v2,x1,y1,z1,u1,v1 end
+  if y1>y3 then x1,y1,z1,u1,v1,x3,y3,z3,u3,v3 = x3,y3,z3,u3,v3,x1,y1,z1,u1,v1 end
+  if y2>y3 then x2,y2,z2,u2,v2,x3,y3,z3,u3,v3 = x3,y3,z3,u3,v3,x2,y2,z2,u2,v2 end
+  if y1==y3 then return end
+
+  -- perspective terms (w=1/z)
+  local w1,w2,w3 = 1/z1, 1/z2, 1/z3
+  local u1w,v1w  = u1*w1, v1*w1
+  local u2w,v2w  = u2*w2, v2*w2
+  local u3w,v3w  = u3*w3, v3*w3
+
+  -- long edge (1->3) slopes per y
+  local dy13 = y3 - y1
+  local dx13 = (x3 - x1)/dy13
+  local du13 = (u3w - u1w)/dy13
+  local dv13 = (v3w - v1w)/dy13
+  local dw13 = (w3  - w1 )/dy13
+
+  -- y bounds
+  local y0  = ceil(y1)
+  local y3i = ceil(y3) - 1
+  if y0>127 or y3i<0 then return end
+  if y0<0 then y0=0 end
+  if y3i>127 then y3i=127 end
+  if y0>y3i then return end
+
+  -- evaluate long edge at y
+  local function long_at(y)
+    local t = y - y1
+    return x1 + dx13*t,
+           u1w+ du13*t,
+           v1w+ dv13*t,
+           w1 + dw13*t
+  end
+
+  -- band scan with short edge a->b
+  local function band(ax,ay,au,av,aw, bx,by,bu,bv,bw, yA,yB)
+    local dy  = by - ay
+    if dy<=0 then return end
+    local dxs = (bx-ax)/dy
+    local duw = (bu-au)/dy
+    local dvw = (bv-av)/dy
+    local dww = (bw-aw)/dy
+
+    local t   = yA - ay
+    local xs  = ax + dxs*t
+    local us  = au + duw*t
+    local vs  = av + dvw*t
+    local ws  = aw + dww*t
+
+    local xl,ul,vl,wl = long_at(yA)
+
+    -- constants
+    local min,max,flr,tline = min,max,flr,tline
+    local mx0,my0 = mx,my
+
+    for y=yA,yB do
+      -- choose left/right
+      local xr,ur,vr,wr = xs,us,vs,ws
+      local xl2,xr2 = xl,xr
+      local ul2,ur2 = ul,ur
+      local vl2,vr2 = vl,vr
+      local wl2,wr2 = wl,wr
+      if xl2>xr2 then
+        xl2,xr2 = xr2,xl2
+        ul2,ur2 = ur2,ul2
+        vl2,vr2 = vr2,vl2
+        wl2,wr2 = wr2,wl2
+      end
+
+      -- x clip
+      local xL = max(0, ceil(xl2))
+      local xR = min(127, flr(xr2))
+      if xL<=xR then
+        local span = xr2 - xl2
+        if span>0 then
+          -- per-x slopes for (u/z, v/z, 1/z)
+          local invspan = 1/span
+          local dux = (ur2-ul2)*invspan
+          local dvx = (vr2-vl2)*invspan
+          local dwx = (wr2-wl2)*invspan
+
+          -- start at xL
+          local dxL = xL - xl2
+          local uoz = ul2 + dux*dxL
+          local voz = vl2 + dvx*dxL
+          local wz  = wl2 + dwx*dxL
+
+          -- adaptive chunk size based on relative change of w within a chunk
+          local x = xL
+          while x<=xR do
+            local remain = xR - x + 1
+            -- choose seg so |Δw/w| ≲ eps
+            local rel = abs(dwx)/max(0.0001, abs(wz))
+            local seg = (rel>0) and flr(min(remain, max(2, eps/rel))) or remain
+            if seg>chunk_max then seg=chunk_max end
+            if seg<2 then seg=2 end
+            if seg>remain then seg=remain end
+
+            -- endpoints in u,v (recover from u/z)
+            local u0 = uoz / wz
+            local v0 = voz / wz
+            local uoz1 = uoz + dux*seg
+            local voz1 = voz + dvx*seg
+            local wz1  = wz  + dwx*seg
+            local u1 = uoz1 / wz1
+            local v1 = voz1 / wz1
+
+            -- linear per-pixel delta over the chunk
+            local du = (u1 - u0)/seg
+            local dv = (v1 - v0)/seg
+
+            tline(x, y, x+seg-1, y, mx0 + u0/8, my0 + v0/8, du/8, dv/8)
+
+            x   += seg
+            uoz += dux*seg
+            voz += dvx*seg
+            wz  += dwx*seg
+          end
+        end
+      end
+
+      -- next scanline
+      xs += dxs; us += duw; vs += dvw; ws += dww
+      xl += dx13; ul += du13; vl += dv13; wl += dw13
+    end
+  end
+
+  local yA = y0
+  local yB = ceil(y2)-1
+  if yA<=yB then
+    band(x1,y1,u1w,v1w,w1,  x2,y2,u2w,v2w,w2,  yA,yB)
+  end
+  local yC = max(ceil(y2), y0)
+  local yD = y3i
+  if yC<=yD then
+    band(x2,y2,u2w,v2w,w2,  x3,y3,u3w,v3w,w3,  yC,yD)
+  end
+end
+
+-- quad as two tris (convex), perspective-correct
+function qtex_map_persp_fast(
+  x1,y1,z1, x2,y2,z2, x3,y3,z3, x4,y4,z4,
+  mx,my, tw,th, ru,rv, chunk_max, eps
+)
+  local wpx,hpx = (tw or 4)*8, (th or 4)*8
+  tri_tex_persp_fast(
+    x1,y1,z1, 0,0,
+    x2,y2,z2, wpx,0,
+    x3,y3,z3, wpx,hpx,
+    mx,my, tw,th, ru,rv, chunk_max, eps
+  )
+  tri_tex_persp_fast(
+    x1,y1,z1, 0,0,
+    x3,y3,z3, wpx,hpx,
+    x4,y4,z4, 0,hpx,
+    mx,my, tw,th, ru,rv, chunk_max, eps
+  )
+end
+
+--------------------------------------------------------
+
+
+-- -- perspective-correct textured triangle using tline + per-span chunking
+-- -- screen verts: (x1,y1,z1) .. (x3,y3,z3)
+-- -- texture UVs in PIXELS relative to your rect: (0..tw*8, 0..th*8)
+-- -- mx,my = top-left of texture rect in MAP TILES (not spritesheet)
+-- -- tw,th = rect size in MAP TILES (default 4x4 = 32x32)
+-- -- ru,rv = UV scale (1=normal, <1=zoom in, >1=repeats -> pre-tile in map)
+-- -- chunk = max pixels per tline segment on a span (default 8)
+-- function tri_tex_persp(
+--   x1,y1,z1,u1,v1,
+--   x2,y2,z2,u2,v2,
+--   x3,y3,z3,u3,v3,
+--   mx,my, tw,th, ru,rv, chunk
+-- )
+--   tw,th = tw or 4, th or 4
+--   ru,rv = ru or 1, rv or 1
+--   chunk = chunk or 8
+
+--   -- scale UVs for stretch/repeat
+--   u1,u2,u3 = u1*ru, u2*ru, u3*ru
+--   v1,v2,v3 = v1*rv, v2*rv, v3*rv
+
+--   -- sort by y (y1 <= y2 <= y3)
+--   if y1>y2 then x1,y1,z1,u1,v1,x2,y2,z2,u2,v2 = x2,y2,z2,u2,v2,x1,y1,z1,u1,v1 end
+--   if y1>y3 then x1,y1,z1,u1,v1,x3,y3,z3,u3,v3 = x3,y3,z3,u3,v3,x1,y1,z1,u1,v1 end
+--   if y2>y3 then x2,y2,z2,u2,v2,x3,y3,z3,u3,v3 = x3,y3,z3,u3,v3,x2,y2,z2,u2,v2 end
+--   if y1==y3 then return end
+
+--   -- precompute reciprocals and uv/z for perspective
+--   local w1,w2,w3 = 1/z1, 1/z2, 1/z3
+--   local u1w, v1w = u1*w1, v1*w1
+--   local u2w, v2w = u2*w2, v2*w2
+--   local u3w, v3w = u3*w3, v3*w3
+
+--   -- ceil helper
+--   local function ceil1(a) local i=flr(a) if a>i then i+=1 end return i end
+
+--   -- long edge (1->3) slopes (x, u/z, v/z, 1/z) per y
+--   local dy13 = y3-y1
+--   local dx13 = (x3-x1)/dy13
+--   local du13 = (u3w-u1w)/dy13
+--   local dv13 = (v3w-v1w)/dy13
+--   local dw13 = (w3-w1)/dy13
+
+--   local ystart = ceil1(y1)
+--   local yend   = ceil1(y3)-1
+--   if ystart>127 or yend<0 then return end
+--   if ystart<0 then ystart=0 end
+--   if yend>127 then yend=127 end
+
+--   -- state on long edge at arbitrary y
+--   local function long_at(y)
+--     local t=y-y1
+--     return x1 + dx13*t,
+--            u1w+ du13*t,
+--            v1w+ dv13*t,
+--            w1 + dw13*t
+--   end
+
+--   -- draw a band yA..yB using a "short" edge slopes (a->b)
+--   local function scan_band(yA,yB, ax,ay,az,auw,avw,aw, bx,by,bz,buw,bvw,bw)
+--     if yA>yB then return end
+
+--     local dy = by-ay
+--     local dxs = (bx-ax)/dy
+--     local duw = (buw-auw)/dy
+--     local dvw = (bvw-avw)/dy
+--     local dww = (bw-aw)/dy
+
+--     -- edge states at yA
+--     local tA = yA-ay
+--     local xs = ax + dxs*tA
+--     local us = auw+ duw*tA
+--     local vs = avw+ dvw*tA
+--     local ws = aw + dww*tA
+
+--     local xl,ul,vl,wl = long_at(yA)
+
+--     for y=yA,yB do
+--       local xr,ur,vr,wr = xs,us,vs,ws
+--       local xl2,xr2 = xl,xr
+--       local ul2,ur2 = ul,ur
+--       local vl2,vr2 = vl,vr
+--       local wl2,wr2 = wl,wr
+--       if xl2>xr2 then
+--         xl2,xr2 = xr2,xl2
+--         ul2,ur2 = ur2,ul2
+--         vl2,vr2 = vr2,vl2
+--         wl2,wr2 = wr2,wl2
+--       end
+
+--       -- clip horizontally
+--       local x0 = max(0, ceil1(xl2))
+--       local x1 = min(127, flr(xr2))
+--       if x0<=x1 then
+--         local span = xr2 - xl2
+--         if span > 0 then
+--           -- per-x slopes for (u/z, v/z, 1/z)
+--           local dux = (ur2-ul2)/span
+--           local dvx = (vr2-vl2)/span
+--           local dwx = (wr2-wl2)/span
+
+--           -- start at x = x0
+--           local t = x0 - xl2
+--           local uoz = ul2 + dux*t
+--           local voz = vl2 + dvx*t
+--           local wz  = wl2 + dwx*t
+
+--           -- segment in small chunks so tline gets nearly-correct du/dv
+--           local x = x0
+--           while x<=x1 do
+--             local seg = x1 - x + 1
+--             if seg>chunk then seg=chunk end
+
+--             -- compute correct u,v at both ends of the chunk
+--             local u0 = uoz / wz
+--             local v0 = voz / wz
+
+--             local uoz1 = uoz + dux*seg
+--             local voz1 = voz + dvx*seg
+--             local wz1  = wz  + dwx*seg
+
+--             local u1 = uoz1 / wz1
+--             local v1 = voz1 / wz1
+
+--             -- per-pixel deltas for this chunk (linear between endpoints)
+--             local du = (u1-u0)/seg
+--             local dv = (v1-v0)/seg
+
+--             -- send to tline (map units are tiles)
+--             tline(x, y, x+seg-1, y, mx + u0/8, my + v0/8, du/8, dv/8)
+
+--             -- advance chunk state
+--             x   += seg
+--             uoz += dux*seg
+--             voz += dvx*seg
+--             wz  += dwx*seg
+--           end
+--         end
+--       end
+
+--       -- step one scanline on both edges
+--       xs += dxs; us += duw; vs += dvw; ws += dww
+--       xl += dx13; ul += du13; vl += dv13; wl += dw13
+--     end
+--   end
+
+--   local y0 = ceil1(y1)
+--   local y3i = ceil1(y3)-1
+
+--   if y1==y2 then
+--     -- flat top: short edge 2->3
+--     local yA,yB = y0,y3i
+--     scan_band(yA,yB, x2,y2,z2,u2w,v2w,w2,  x3,y3,z3,u3w,v3w,w3)
+--     return
+--   end
+
+--   if y2==y3 then
+--     -- flat bottom: short edge 1->2
+--     local yA,yB = y0,y3i
+--     scan_band(yA,yB, x1,y1,z1,u1w,v1w,w1,  x2,y2,z2,u2w,v2w,w2)
+--     return
+--   end
+
+--   -- general: split at y2
+--   local ymid = ceil1(y2)-1
+--   if y0<=ymid then
+--     scan_band(y0,ymid, x1,y1,z1,u1w,v1w,w1,  x2,y2,z2,u2w,v2w,w2)
+--   end
+--   local y2s = max(ceil1(y2), y0)
+--   if y2s<=y3i then
+--     scan_band(y2s,y3i, x2,y2,z2,u2w,v2w,w2, x3,y3,z3,u3w,v3w,w3)
+--   end
+-- end
+
+-- -- perspective-correct textured quad (convex) as two tris
+-- -- screen CCW: 1->2->3->4 with (z>0). UV covers the rect (tw*8 x th*8).
+-- function qtex_map_persp(
+--   x1,y1,z1, x2,y2,z2, x3,y3,z3, x4,y4,z4,
+--   mx,my, tw,th, ru,rv, chunk
+-- )
+--   local wpx,hpx = (tw or 4)*8, (th or 4)*8
+--   -- tri A: (1,2,3)
+--   tri_tex_persp(
+--     x1,y1,z1, 0,0,
+--     x2,y2,z2, wpx,0,
+--     x3,y3,z3, wpx,hpx,
+--     mx,my, tw,th, ru,rv, chunk
+--   )
+--   -- tri B: (1,3,4)
+--   tri_tex_persp(
+--     x1,y1,z1, 0,0,
+--     x3,y3,z3, wpx,hpx,
+--     x4,y4,z4, 0,hpx,
+--     mx,my, tw,th, ru,rv, chunk
+--   )
+-- end
