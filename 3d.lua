@@ -60,37 +60,48 @@ end
 function gameupdate()
     --if btn(⬆️) then vy+= speed  end
     -- if btn(⬇️) then vy-= speed  end
-    if btn(➡️) then px-= speed*20.0  end
-    if btn(⬅️) then px+= speed*20.0 end
+    if btn(➡️) then 
+        if (shipx+15 + xstep * 2.5 + speed*30) / xstep <= xsize then
+            px-= speed*20.0  
+            shipx+= speed*30
+        end
+    end
+    if btn(⬅️) then 
+        if (shipx -15 + xstep * 2.5 - speed*30) / xstep > 0 then
+            px+= speed*20.0
+            shipx-= speed*30  
+        end
+    end
+    
     if btnp(⬆️) then advance += advancespeed  end
     if btnp(⬇️) then advance -= advancespeed  end
-    if btn(➡️) then shipx+= speed*30  end
-    if btn(⬅️) then shipx-= speed*30 end
-    if btnp(❎ ) and curjumps>0 then vy = -10 curjumps-=1 end
-
     
+    if btnp(❎ ) and curjumps>0 then vy = -10 curjumps-=1 end
     
     -- px+=vx
     shipy+=vy
     -- vx*=damp
     pz+=advance
     
-    checkdownwardcollision()
+    checkcollisions()
 end
 
-function checkdownwardcollision()
+function checkcollisions()
     --printh("x: " .. shipx .. "  y: " .. shipy .. "  z: " .. shipz)
     local ix = (shipx + xstep * 2.5) / xstep
     local iy = (shipy + ystep * 4) / ystep
     local iz = (shipz + pz) / zstep
     
-
     local ny = (shipy+vy+gravity + ystep * 4) / ystep
     local nz = (shipz + pz + advance) / zstep
+
+    if ix <= 0 then shipx = -xstep * 2.4999 ix = 1 end
+
     printh("ix: " .. ceil(ix) .. "  ny: " .. ceil(ny) .. "  iz: " .. ceil(iz))-- .. "  cell  " .. level[ceil(ix)][ceil(ny)][ceil(iz)] )
     if ny<=0 then
         crash()
     elseif level[ceil(ix)][ceil(ny)][ceil(iz)] != 0 then
+        if vy < 0 then crash() return end
         vy = 0
         ontheground = true
         curjumps = maxjumps
@@ -168,8 +179,8 @@ function drawbox()
 --     function qtex_map_persp(
 --   x1,y1,z1, x2,y2,z2, x3,y3,z3, x4,y4,z4,
 --   mx,my, tw,th, ru,rv, chunk
-    qtex_map_persp_fast(px2, py1, cz, px4, py3, z2, px4, py4, z2, px2, py2, cz, 4,0,2,2,1,1,8, 4)
-    qtex_map_persp_fast(px1, py1, cz, px3, py3, z2, px3, py4, z2, px1, py2, cz, 4,0,2,2,1,1,8, 4)
+    qtex_map_persp_fast(px2, py1, cz, px4, py3, z2, px4, py4, z2, px2, py2, cz, 4,0,2,2,1,1,16, 8)
+    qtex_map_persp_fast(px1, py1, cz, px3, py3, z2, px3, py4, z2, px1, py2, cz, 4,0,2,2,1,1,16, 8)
     --qtex_map(px2, py1, px4, py3, px4, py4, px2, py2, 0,0,4,4,1,1)    
     --qtex_map(px1, py1, px3, py3, px3, py4, px1, py2, 0,0,4,4,2,1)
 
