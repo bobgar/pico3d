@@ -14,6 +14,8 @@ function _init()
     damp=.9    
     ontheground = true
     gravity = 1
+    maxjumps = 1
+    curjumps = 1
     --outline=true
 
     xstep = 256 / (xsize-1)
@@ -64,16 +66,16 @@ function gameupdate()
     if btnp(⬇️) then advance -= advancespeed  end
     if btn(➡️) then shipx+= speed*30  end
     if btn(⬅️) then shipx-= speed*30 end
-    if btnp(❎ ) and ontheground then vy = -10 end
+    if btnp(❎ ) and curjumps>0 then vy = -10 curjumps-=1 end
 
     
-    
-    checkdownwardcollision()
     
     -- px+=vx
     shipy+=vy
     -- vx*=damp
     pz+=advance
+    
+    checkdownwardcollision()
 end
 
 function checkdownwardcollision()
@@ -91,6 +93,7 @@ function checkdownwardcollision()
     elseif level[ceil(ix)][ceil(ny)][ceil(iz)] != 0 then
         vy = 0
         ontheground = true
+        curjumps = maxjumps
     else
         vy += gravity
         ontheground = false
