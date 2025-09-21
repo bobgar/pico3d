@@ -14,6 +14,7 @@ function _init()
     damp=.9    
     ontheground = true
     gravity = 1
+    --outline=true
 
     xstep = 256 / (xsize-1)
     ystep = (128 / (ysize-1))
@@ -31,6 +32,8 @@ function _init()
         {x=0, y=50, z=1},
         {x=0, y=60, z=1.5},
     }
+    _update = gameupdate
+    _draw = gamedraw
 end
 
 function initlevel()
@@ -52,7 +55,7 @@ function initlevel()
     end
 end
 
-function _update()
+function gameupdate()
     --if btn(⬆️) then vy+= speed  end
     -- if btn(⬇️) then vy-= speed  end
     if btn(➡️) then px-= speed*20.0  end
@@ -83,7 +86,9 @@ function checkdownwardcollision()
     local ny = (shipy+vy+gravity + ystep * 4) / ystep
     local nz = (shipz + pz + advance) / zstep
     printh("ix: " .. ceil(ix) .. "  ny: " .. ceil(ny) .. "  iz: " .. ceil(iz))-- .. "  cell  " .. level[ceil(ix)][ceil(ny)][ceil(iz)] )
-    if level[ceil(ix)][ceil(ny)][ceil(iz)] != 0 then
+    if ny<=0 then
+        crash()
+    elseif level[ceil(ix)][ceil(ny)][ceil(iz)] != 0 then
         vy = 0
         ontheground = true
     else
@@ -92,14 +97,19 @@ function checkdownwardcollision()
     end
 
     if level[ceil(ix)][ceil(iy)][ceil(nz)] != 0 then
-        --printh("crash")
-        _update = nil
-        _draw = nil
-        print("YOU CRASHED")
+        crash()
     end
 end
 
-function _draw()
+function crash()
+    --printh("crash")
+    restartcounter=60
+    _update = function() restartcounter-=1 if restartcounter<=0 then _init() end end
+    _draw = nil
+    print("YOU CRASHED")
+end
+
+function gamedraw()
     --rectfill(0,0,127,63,12)
     --rectfill(0,64,127,127,11)
     drawbox()
@@ -194,6 +204,13 @@ function drawcubefronts(x,y,iz, c)
     --front
     if iz<=1 or level[x][y][iz-1] == 0 then
         qfill_ccw( px1, py1, px1, py2, px2, py2,px2, py1)
+        if(outline) then
+            color(0)
+            line(px1, py1, px1, py2)
+            line(px1, py2, px2, py2)
+            line(px2, py2,px2, py1)
+            line(px2, py1, px1, py1)
+        end
         --qtex_map(px1, py1, px2, py1, px2, py2,px1, py2, 0, 0, 4, 4, 4, 2)        
     end
 end
@@ -227,12 +244,12 @@ function drawcubemids(x,y,iz, c)
     --qfill_ccw( px3, py3, px3, py4, px4, py4,px4, py3)
     
     --right
-    if x>=xsize or level[x+1][y][iz] == 0 then
+    if x<xsize and level[x+1][y][iz] == 0 then
         qfill_ccw(px2, py1, px4, py3, px4, py4, px2, py2)
     end
 
     --left    
-    if x<=1 or level[x-1][y][iz] == 0 then
+    if x>1 and level[x-1][y][iz] == 0 then
         qfill_ccw(px1, py1, px3, py3, px3, py4, px1, py2)
     end
 
@@ -242,7 +259,7 @@ function drawcubemids(x,y,iz, c)
     end
 
     --top
-    if y<=1 or level[x][y-1][iz] == 0 then
+    if y>1 and level[x][y-1][iz] == 0 then
         qfill_ccw(px2, py1, px4, py3, px3, py3, px1, py1)
         --qtex_map(px2, py1, px4, py3, px3, py3, px1, py1, 0, 0, 4, 4, 1, 1)  
     end
