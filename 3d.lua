@@ -3,15 +3,17 @@ function _init()
     xsize = 5
     ysize = 5
     zdist = 8
-    px = 1
-    py = 2
+    px = 0
+    py = 0
     pz = 0
     speed = .1
+    advancespeed = 0.01
     vx=0
     vy=0
     advance=.1
-    damp=.98
-    newmove = false;
+    damp=.9    
+    ontheground = true
+    gravity = 1
 
     xstep = 256 / (xsize-1)
     ystep = (128 / (ysize-1))
@@ -21,7 +23,7 @@ function _init()
 
     copy_sprites_to_map(1,0, 8, 4, 0, 0)
     shipx=0
-    shipy=0
+    shipy=-10
     shipz=0
     playerpoints = {
         {x=-15, y=60, z=1},
@@ -53,17 +55,48 @@ end
 function _update()
     --if btn(⬆️) then vy+= speed  end
     -- if btn(⬇️) then vy-= speed  end
-    if btn(➡️) then vx-= speed/2.0  end
-    if btn(⬅️) then vx+= speed/2.0 end
-    if btnp(⬆️) then shipy-= speed*10  end
-    if btnp(⬇️) then shipy+= speed*10  end
-    if btn(➡️) then shipx+= speed*10  end
-    if btn(⬅️) then shipx-= speed*10 end
-    px+=vx
-    py+=vy
-    vx*=damp
-    vy*=damp
+    if btn(➡️) then px-= speed*20.0  end
+    if btn(⬅️) then px+= speed*20.0 end
+    if btnp(⬆️) then advance += advancespeed  end
+    if btnp(⬇️) then advance -= advancespeed  end
+    if btn(➡️) then shipx+= speed*30  end
+    if btn(⬅️) then shipx-= speed*30 end
+    if btnp(❎ ) and ontheground then vy = -10 end
+
+    
+    
+    checkdownwardcollision()
+    
+    -- px+=vx
+    shipy+=vy
+    -- vx*=damp
     pz+=advance
+end
+
+function checkdownwardcollision()
+    --printh("x: " .. shipx .. "  y: " .. shipy .. "  z: " .. shipz)
+    local ix = (shipx + xstep * 2.5) / xstep
+    local iy = (shipy + ystep * 4) / ystep
+    local iz = (shipz + pz) / zstep
+    
+
+    local ny = (shipy+vy+gravity + ystep * 4) / ystep
+    local nz = (shipz + pz + advance) / zstep
+    printh("ix: " .. ceil(ix) .. "  ny: " .. ceil(ny) .. "  iz: " .. ceil(iz))-- .. "  cell  " .. level[ceil(ix)][ceil(ny)][ceil(iz)] )
+    if level[ceil(ix)][ceil(ny)][ceil(iz)] != 0 then
+        vy = 0
+        ontheground = true
+    else
+        vy += gravity
+        ontheground = false
+    end
+
+    if level[ceil(ix)][ceil(iy)][ceil(nz)] != 0 then
+        --printh("crash")
+        _update = nil
+        _draw = nil
+        print("YOU CRASHED")
+    end
 end
 
 function _draw()
@@ -217,14 +250,14 @@ end
 
 function drawplayer()
     
-    local p1x = (playerpoints[1].x+shipx) / playerpoints[1].z + 64 + px
-    local p1y = (playerpoints[1].y+shipy) / playerpoints[1].z + 64 + py
-    local p2x = (playerpoints[2].x+shipx) / playerpoints[2].z + 64 + px
-    local p2y = (playerpoints[2].y+shipy) / playerpoints[2].z + 64 + py
-    local p3x = (playerpoints[3].x+shipx) / playerpoints[3].z + 64 + px
-    local p3y = (playerpoints[3].y+shipy) / playerpoints[3].z + 64 + py
-    local p4x = (playerpoints[4].x+shipx) / playerpoints[4].z + 64 + px
-    local p4y = (playerpoints[4].y+shipy) / playerpoints[4].z + 64 + py
+    local p1x = (playerpoints[1].x+shipx + px) / playerpoints[1].z + 64
+    local p1y = (playerpoints[1].y+shipy + py) / playerpoints[1].z + 64
+    local p2x = (playerpoints[2].x+shipx + px) / playerpoints[2].z + 64
+    local p2y = (playerpoints[2].y+shipy + py) / playerpoints[2].z + 64
+    local p3x = (playerpoints[3].x+shipx + px) / playerpoints[3].z + 64
+    local p3y = (playerpoints[3].y+shipy + py) / playerpoints[3].z + 64
+    local p4x = (playerpoints[4].x+shipx + px) / playerpoints[4].z + 64
+    local p4y = (playerpoints[4].y+shipy + py) / playerpoints[4].z + 64
 
     --for right now take the most naive appproachh
     color(3)
