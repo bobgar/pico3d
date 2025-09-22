@@ -86,19 +86,22 @@ function gameupdate()
     checkcollisions()
 end
 
-function checkcollisionwithallpoints(x,y,z)
-    for p in all(playerpoints) do
-        local ix = (p.x + x) / xstep
-        local iy = (p.y + y) / ystep
-        local iz = (p.z + z) / ystep
+function checkcollisionwithallpoints(x,y,z)    
+    for shippoint in all(playerpoints) do
+        local ix = (shippoint.x + x) / xstep
+        local iy = (shippoint.y-60 + y) / ystep
+        local iz = (shippoint.z-1 + z) / zstep
         
         --Make sure we're in bounds.  Not sure whether to count this as true or false, but for now true.
-        if ix<=0 or x > xsize then return true
-        if iy<=0 or x > ysize then return true
-        if iz<=0 or x > zsize then return true
-        
-        return level[ceil(ix)][ceil(iy)][ceil(iz)] == 0
+        if ix<=0 or ix > xsize then return true end
+        if iy<=0 or iy > ysize then return true end
+        if iz<=0 or iz > 100 then return true end
+
+        printh("ix: " .. ix .. "  iy: " .. iy .. "  iz: " .. iz .. "  cell value: " ..  level[ceil(ix)][ceil(iy)][ceil(iz)])-- .. "  cell  " .. level[ceil(ix)][ceil(ny)][ceil(iz)] )
+
+        if level[ceil(ix)][ceil(iy)][ceil(iz)] != 0 then return true end
     end
+    return false
 end
 
 function checkcollisions()
@@ -115,9 +118,10 @@ function checkcollisions()
     if ny<=0 then
         crash()
     -- If there is ground in the next space we'd go to 
-    elseif level[ceil(ix)][ceil(ny)][ceil(iz)] != 0 then
+    --elseif level[ceil(ix)][ceil(ny)][ceil(iz)] != 0 then
+    elseif checkcollisionwithallpoints(shipx + xstep * 2.5, (shipy+vy+gravity + ystep * 4), shipz + pz) then
         -- if we're still going up, were jumping into a block so crash
-        if vy < 0 then crash() return end
+        --if vy < 0 then crash() return end
         --Otherwise, we're on ground.  reset max jumps and set y velocity to 0
         vy = 0
         ontheground = true
