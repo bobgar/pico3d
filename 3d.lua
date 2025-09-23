@@ -1,7 +1,7 @@
 function _init()
     level = {}
-    sidecolors ={1, 2, 4, 5, 9, 15}
-    frontcolors = {12, 14, 9, 6, 10, 7}
+    sidecolors ={1, 2, 4,  9, 15}
+    frontcolors = {12, 14, 9,  10, 7}
     xsize = 5
     ysize = 5
     zdist = 8
@@ -16,9 +16,9 @@ function _init()
     damp=.9    
     ontheground = true
     gravity = .5
-    maxjumps = 1
-    curjumps = 1
-    jumpheight = -8
+    maxjumps = 2
+    curjumps = 2
+    jumpheight = -7
     --outline=true
 
     xstep = 256 / (xsize-1)
@@ -66,16 +66,18 @@ function gameupdate()
     -- if btn(⬇️) then vy-= speed  end
     if btn(➡️) then 
         if (shipx+ playerpoints[2].x + xstep * 2.5 + speed*30) / xstep <= xsize then
-            px-= speed*20.0  
+            --px-= speed*20.0  
             shipx+= speed*30
         end
     end
     if btn(⬅️) then 
         if (shipx + playerpoints[1].x + xstep * 2.5 - speed*30) / xstep > 0 then
-            px+= speed*20.0
+            --px+= speed*20.0
             shipx-= speed*30  
         end
     end
+    px = -shipx * .75
+    py = -shipy * .5
     
     if btnp(⬆️) then advance += advancespeed  end
     if btnp(⬇️) then advance -= advancespeed  end
@@ -134,7 +136,8 @@ function checkcollisions()
         ontheground = false
     end
 
-    if level[ceil(ix)] and level[ceil(ix)][ceil(iy)] and level[ceil(ix)][ceil(iy)][ceil(nz)] != 0 then
+    --if level[ceil(ix)] and level[ceil(ix)][ceil(iy)] and level[ceil(ix)][ceil(iy)][ceil(nz)] != 0 then
+    if checkcollisionwithallpoints(shipx + xstep * 2.5, shipy + ystep * 4, shipz + pz) then
         crash()
     end
 end
@@ -179,8 +182,9 @@ function gamedraw()
     end
     
     --right now always draw the player last (may change)
-    
-    --drawplayer()
+    if iy <= 0 then
+        drawplayer()
+    end
 
     color(0)
     print("FPS: " .. stat(7), 80,100)
@@ -188,7 +192,7 @@ function gamedraw()
 end
 
 function drawbox()
-    local cz = 1--pz%1
+    local cz = .1--pz%1
 
     local x = 1
     local y = 0
@@ -204,6 +208,11 @@ function drawbox()
     local py2 = (cy+ystep*ysize) / cz + 64 
     local py3 = cy / (cz+zstep*zdist) + 64
     local py4 = (cy+ystep*ysize) / (cz+zstep*zdist) + 64  
+
+    --qfill_ccw(px2, py1, px4, py3, px3, py3, px1, py1)    
+    rectfill(0, 0, 128, py3, 5) 
+    rectfill(px3, py3, px4, py4, 0) 
+
     color(6)
     qfill_ccw(px2, py1, px4, py3, px4, py4, px2, py2)
     qfill_ccw(px1, py1, px3, py3, px3, py4, px1, py2) 
@@ -212,9 +221,7 @@ function drawbox()
     --qtex_map_persp_fast(px2, py1, cz, px4, py3, z2, px4, py4, z2, px2, py2, cz, 0,0,16,4,16,1,32, 16, pz*20,0)
     --qtex_map_persp_fast(px1, py1, cz, px3, py3, z2, px3, py4, z2, px1, py2, cz, 0,0,16,4,16,1,32, 16, pz*20,0)    
 
-    color(5)
-    qfill_ccw(px2, py1, px4, py3, px3, py3, px1, py1)    
-    rectfill(px3, py3, px4, py4, 0) 
+    
     --sspr(8,0,64,32, px3, py3, px4-px3, (py4-py3) * 1.4 )
 end
 
@@ -289,7 +296,7 @@ function drawcubemids(x,y,iz, c)
     end
 
     --top
-    if y>1 and level[x][y-1][iz] == 0 then
+    if y <= 1 or level[x][y-1][iz] == 0 then
         qfill_ccw(px2, py1, px4, py3, px3, py3, px1, py1)
         --qtex_map(px2, py1, px4, py3, px3, py3, px1, py1, 0, 0, 4, 4, 1, 1)  
     end
