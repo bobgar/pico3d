@@ -1,5 +1,7 @@
 function _init()
     level = {}
+    sidecolors ={1, 2, 4, 5, 9, 15}
+    frontcolors = {12, 14, 9, 6, 10, 7}
     xsize = 5
     ysize = 5
     zdist = 8
@@ -10,12 +12,13 @@ function _init()
     advancespeed = 0.01
     vx=0
     vy=0
-    advance=.1
+    advance=.05
     damp=.9    
     ontheground = true
-    gravity = 1
+    gravity = .5
     maxjumps = 1
     curjumps = 1
+    jumpheight = -8
     --outline=true
 
     xstep = 256 / (xsize-1)
@@ -24,7 +27,8 @@ function _init()
 
     initlevel()
 
-    copy_sprites_to_map(1,0, 8, 4, 0, 0)
+    --copy_sprites_to_map(1,0, 8, 4, 0, 0)
+    copy_sprites_to_map(0,64,16,4,0,0)
     shipx=0
     shipy=-10
     shipz=0
@@ -34,7 +38,7 @@ function _init()
         {x=0, y=50, z=1},
         {x=0, y=60, z=1.5},
     }
-    _update = gameupdate
+    _update60 = gameupdate
     _draw = gamedraw
 end
 
@@ -48,7 +52,7 @@ function initlevel()
                 --level[x][y][z] =  y == ysize or y == (flr(-z/3)%ysize)
                 
                 if y == ysize or (rnd() < .05) then 
-                    level[x][y][z] = ((x+z)%10) +1
+                    level[x][y][z] = (x+z) % #sidecolors +1  --((x+z)%10) +1
                 else
                     level[x][y][z] =  0
                 end 
@@ -76,7 +80,7 @@ function gameupdate()
     if btnp(⬆️) then advance += advancespeed  end
     if btnp(⬇️) then advance -= advancespeed  end
     
-    if btnp(❎ ) and curjumps>0 then vy = -10 curjumps-=1 end
+    if btnp(❎ ) and curjumps>0 then vy = jumpheight curjumps-=1 end
     
     -- px+=vx
     shipy+=vy
@@ -93,11 +97,10 @@ function checkcollisionwithallpoints(x,y,z)
         local iz = (shippoint.z-1 + z) / zstep
         
         --Make sure we're in bounds.  Not sure whether to count this as true or false, but for now true.
-        if ix<=0 or ix > xsize then return true end
-        if iy<=0 or iy > ysize then return true end
-        if iz<=0 or iz > 100 then return true end
+        if ix<=0 or ix > xsize or iy > ysize or iz<=0 or iz > 100  then return true end
+        if iy<=0  then return false end        
 
-        printh("ix: " .. ix .. "  iy: " .. iy .. "  iz: " .. iz .. "  cell value: " ..  level[ceil(ix)][ceil(iy)][ceil(iz)])-- .. "  cell  " .. level[ceil(ix)][ceil(ny)][ceil(iz)] )
+        --printh("ix: " .. ix .. "  iy: " .. iy .. "  iz: " .. iz .. "  cell value: " ..  level[ceil(ix)][ceil(iy)][ceil(iz)])-- .. "  cell  " .. level[ceil(ix)][ceil(ny)][ceil(iz)] )
 
         if level[ceil(ix)][ceil(iy)][ceil(iz)] != 0 then return true end
     end
@@ -115,13 +118,12 @@ function checkcollisions()
 
     --printh("ix: " .. ceil(ix) .. "  ny: " .. ceil(ny) .. "  iz: " .. ceil(iz))-- .. "  cell  " .. level[ceil(ix)][ceil(ny)][ceil(iz)] )
     --if we're below the bottom of the screen, crash
-    if ny<=0 then
+    if ny >=5 then
         crash()
     -- If there is ground in the next space we'd go to 
-    --elseif level[ceil(ix)][ceil(ny)][ceil(iz)] != 0 then
     elseif checkcollisionwithallpoints(shipx + xstep * 2.5, (shipy+vy+gravity + ystep * 4), shipz + pz) then
         -- if we're still going up, were jumping into a block so crash
-        --if vy < 0 then crash() return end
+        if vy < 0 then crash() return end
         --Otherwise, we're on ground.  reset max jumps and set y velocity to 0
         vy = 0
         ontheground = true
@@ -132,44 +134,53 @@ function checkcollisions()
         ontheground = false
     end
 
-    if level[ceil(ix)][ceil(iy)][ceil(nz)] != 0 then
+    if level[ceil(ix)] and level[ceil(ix)][ceil(iy)] and level[ceil(ix)][ceil(iy)][ceil(nz)] != 0 then
         crash()
     end
 end
 
 function crash()
-    --printh("crash")
     restartcounter=60
-    _update = function() restartcounter-=1 if restartcounter<=0 then _init() end end
+    _update60 = function() restartcounter-=1 if restartcounter<=0 then _init() end end
     _draw = nil
     print("YOU CRASHED")
 end
 
 function gamedraw()
-    --rectfill(0,0,127,63,12)
-    --rectfill(0,64,127,127,11)
+    local ix = ceil( (shipx + xstep * 2.5) / xstep)
+    local iy = ceil( (shipy + ystep * 4) / ystep)
+    local iz = ceil( (shipz + pz) / zstep)
+
+    --printh("ix: " .. ix .. "  iy: " .. iy .. "  iz: " .. iz .. "  cell value: " ..  level[ceil(ix)][ceil(iy)][ceil(iz)])
+
     drawbox()
 
     for z=flr(pz+zdist),flr(pz-1), -1.0 do
-        for x=1,xsize do
-            for y=1,ysize do
+        for y=ysize,1,-1 do
+            for x=1,xsize do
                 if level[x][y][z] != 0 then
                     drawcubemids(x,y,z, level[x][y][z])
                 end
+                if ix == x and iy == y  and iz == z then                     
+                    drawplayer()
+                end
             end
         end
-        for x=1,xsize do
-            for y=1,ysize do
+        for y=ysize,1,-1 do
+            for x=1,xsize do            
                 if level[x][y][z] != 0 then
                     drawcubefronts(x,y,z, level[x][y][z])
                 end
+                -- if ix == x and iy == y  and iz == z then                     
+                --     drawplayer()
+                -- end
             end
         end
     end
     
     --right now always draw the player last (may change)
     
-    drawplayer()
+    --drawplayer()
 
     color(0)
     print("FPS: " .. stat(7), 80,100)
@@ -190,21 +201,16 @@ function drawbox()
     local px4 = (cx+xstep*xsize) / (cz+zstep*zdist) +64
 
     local py1 = cy / cz + 64
-    local py2 = (cy+ystep*ysize) / cz + 64
+    local py2 = (cy+ystep*ysize) / cz + 64 
     local py3 = cy / (cz+zstep*zdist) + 64
-    local py4 = (cy+ystep*ysize) / (cz+zstep*zdist) + 64   
+    local py4 = (cy+ystep*ysize) / (cz+zstep*zdist) + 64  
     color(6)
-    --qfill_ccw(px2, py1, px4, py3, px4, py4, px2, py2)
-    --qfill_ccw(px1, py1, px3, py3, px3, py4, px1, py2) 
+    qfill_ccw(px2, py1, px4, py3, px4, py4, px2, py2)
+    qfill_ccw(px1, py1, px3, py3, px3, py4, px1, py2) 
     --TODO if I want textures here I think I need to tile these.  For now leave as solid colors.
     local z2 = cz+zstep*zdist
---     function qtex_map_persp(
---   x1,y1,z1, x2,y2,z2, x3,y3,z3, x4,y4,z4,
---   mx,my, tw,th, ru,rv, chunk
-    qtex_map_persp_fast(px2, py1, cz, px4, py3, z2, px4, py4, z2, px2, py2, cz, 0,0,4,2,2,2,16, 8)
-    qtex_map_persp_fast(px1, py1, cz, px3, py3, z2, px3, py4, z2, px1, py2, cz, 0,0,4,2,2,2,16, 8)
-    --qtex_map(px2, py1, px4, py3, px4, py4, px2, py2, 0,0,4,4,1,1)    
-    --qtex_map(px1, py1, px3, py3, px3, py4, px1, py2, 0,0,4,4,2,1)
+    --qtex_map_persp_fast(px2, py1, cz, px4, py3, z2, px4, py4, z2, px2, py2, cz, 0,0,16,4,16,1,32, 16, pz*20,0)
+    --qtex_map_persp_fast(px1, py1, cz, px3, py3, z2, px3, py4, z2, px1, py2, cz, 0,0,16,4,16,1,32, 16, pz*20,0)    
 
     color(5)
     qfill_ccw(px2, py1, px4, py3, px3, py3, px1, py1)    
@@ -232,22 +238,10 @@ function drawcubefronts(x,y,iz, c)
     local py3 = cy / (cz+zstep) + 64
     local py4 = (cy+ystep) / (cz+zstep) + 64
 
-    --px1 += px px2 += px px3 += px px4 += px
-    --py1 += py py2 += py py3 += py py4 += py 
-
-    color(c)
-
     --front
-    if iz<=1 or level[x][y][iz-1] == 0 then
-        qfill_ccw( px1, py1, px1, py2, px2, py2,px2, py1)
-        if(outline) then
-            color(0)
-            line(px1, py1, px1, py2)
-            line(px1, py2, px2, py2)
-            line(px2, py2,px2, py1)
-            line(px2, py1, px1, py1)
-        end
-        --qtex_map(px1, py1, px2, py1, px2, py2,px1, py2, 0, 0, 4, 4, 4, 2)        
+    if iz<=1 or level[x][y][iz-1] == 0 then       
+        color(frontcolors[c])
+        qfill_ccw( px1, py1, px1, py2, px2, py2,px2, py1)       
     end
 end
 
@@ -274,7 +268,7 @@ function drawcubemids(x,y,iz, c)
     -- px1 += px px2 += px px3 += px px4 += px
     -- py1 += py py2 += py py3 += py py4 += py 
 
-    color(c)
+    color(sidecolors[c])
 
     --back NOTE never needed right now
     --qfill_ccw( px3, py3, px3, py4, px4, py4,px4, py3)

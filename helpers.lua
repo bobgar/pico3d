@@ -186,17 +186,20 @@ function tri_tex_persp_fast(
   x1,y1,z1,u1,v1,
   x2,y2,z2,u2,v2,
   x3,y3,z3,u3,v3,
-  mx,my, tw,th, ru,rv, chunk_max, eps
+  mx,my, tw,th, ru,rv, chunk_max, eps,
+  uofs, vofs
 )
   -- defaults
-  tw,th      = tw or 4, th or 4          -- 32x32
-  ru,rv      = ru or 1, rv or 1          -- stretch (<=1 zooms in)
-  chunk_max  = chunk_max or 16           -- max px per tline segment
-  eps        = eps or 0.03               -- ~3% w variation per chunk
+  tw,th     = tw or 4, th or 4
+  ru,rv     = ru or 1, rv or 1
+  chunk_max = chunk_max or 16
+  eps       = eps or 0.03
+  uofs      = uofs or 0
+  vofs      = vofs or 0
 
-  -- scale UV once (repeat via pre-tiling in map for speed)
-  u1,u2,u3 = u1*ru, u2*ru, u3*ru
-  v1,v2,v3 = v1*rv, v2*rv, v3*rv
+  -- scale + phase once (repeat via wrapping below)
+  u1,u2,u3 = u1*ru + uofs, u2*ru + uofs, u3*ru + uofs
+  v1,v2,v3 = v1*rv + vofs, v2*rv + vofs, v3*rv + vofs
 
   -- sort by y
   if y1>y2 then x1,y1,z1,u1,v1,x2,y2,z2,u2,v2 = x2,y2,z2,u2,v2,x1,y1,z1,u1,v1 end
@@ -234,6 +237,47 @@ function tri_tex_persp_fast(
            w1 + dw13*t
   end
 
+
+  local function tline_wrap_chunk(x,y,len, u0,v0, du,dv, mx,my, tw,th)
+    local wpx = tw*8
+    local hpx = th*8
+
+    local rem = len
+    local xx  = x
+    local u   = u0
+    local v   = v0
+
+    while rem>0 do
+      -- current uv inside [0,wpx) x [0,hpx)
+      local um = u % wpx; if um<0 then um += wpx end
+      local vm = v % hpx; if vm<0 then vm += hpx end
+
+      -- steps until we hit the next wrap boundary on U or V
+      local step_u = 32767
+      if du>0 then step_u = (wpx - um)/du
+      elseif du<0 then step_u = (um)/(-du) end
+
+      local step_v = 32767
+      if dv>0 then step_v = (hpx - vm)/dv
+      elseif dv<0 then step_v = (vm)/(-dv) end
+
+      local seg = flr(min(rem, step_u, step_v))
+      if seg<1 then seg=1 end
+
+      -- draw this subsegment
+      tline(xx, y, xx+seg-1, y,
+        mx + um/8, my + vm/8,
+        du/8, dv/8)
+
+      -- advance
+      xx  += seg
+      u   += du*seg
+      v   += dv*seg
+      rem -= seg
+    end
+  end
+
+  
   -- band scan with short edge a->b
   local function band(ax,ay,au,av,aw, bx,by,bu,bv,bw, yA,yB)
     local dy  = by - ay
@@ -311,7 +355,8 @@ function tri_tex_persp_fast(
             local du = (u1 - u0)/seg
             local dv = (v1 - v0)/seg
 
-            tline(x, y, x+seg-1, y, mx0 + u0/8, my0 + v0/8, du/8, dv/8)
+            --tline(x, y, x+seg-1, y, mx0 + u0/8, my0 + v0/8, du/8, dv/8)
+            tline_wrap_chunk(x, y, seg, u0, v0, du, dv, mx, my, tw, th)
 
             x   += seg
             uoz += dux*seg
@@ -342,219 +387,20 @@ end
 -- quad as two tris (convex), perspective-correct
 function qtex_map_persp_fast(
   x1,y1,z1, x2,y2,z2, x3,y3,z3, x4,y4,z4,
-  mx,my, tw,th, ru,rv, chunk_max, eps
+  mx,my, tw,th, ru,rv, chunk_max, eps,
+  uofs, vofs 
 )
   local wpx,hpx = (tw or 4)*8, (th or 4)*8
   tri_tex_persp_fast(
     x1,y1,z1, 0,0,
     x2,y2,z2, wpx,0,
     x3,y3,z3, wpx,hpx,
-    mx,my, tw,th, ru,rv, chunk_max, eps
+    mx,my, tw,th, ru,rv, chunk_max, eps, uofs, vofs
   )
   tri_tex_persp_fast(
     x1,y1,z1, 0,0,
     x3,y3,z3, wpx,hpx,
     x4,y4,z4, 0,hpx,
-    mx,my, tw,th, ru,rv, chunk_max, eps
+    mx,my, tw,th, ru,rv, chunk_max, eps, uofs, vofs
   )
 end
-
---------------------------------------------------------
-
-
--- -- perspective-correct textured triangle using tline + per-span chunking
--- -- screen verts: (x1,y1,z1) .. (x3,y3,z3)
--- -- texture UVs in PIXELS relative to your rect: (0..tw*8, 0..th*8)
--- -- mx,my = top-left of texture rect in MAP TILES (not spritesheet)
--- -- tw,th = rect size in MAP TILES (default 4x4 = 32x32)
--- -- ru,rv = UV scale (1=normal, <1=zoom in, >1=repeats -> pre-tile in map)
--- -- chunk = max pixels per tline segment on a span (default 8)
--- function tri_tex_persp(
---   x1,y1,z1,u1,v1,
---   x2,y2,z2,u2,v2,
---   x3,y3,z3,u3,v3,
---   mx,my, tw,th, ru,rv, chunk
--- )
---   tw,th = tw or 4, th or 4
---   ru,rv = ru or 1, rv or 1
---   chunk = chunk or 8
-
---   -- scale UVs for stretch/repeat
---   u1,u2,u3 = u1*ru, u2*ru, u3*ru
---   v1,v2,v3 = v1*rv, v2*rv, v3*rv
-
---   -- sort by y (y1 <= y2 <= y3)
---   if y1>y2 then x1,y1,z1,u1,v1,x2,y2,z2,u2,v2 = x2,y2,z2,u2,v2,x1,y1,z1,u1,v1 end
---   if y1>y3 then x1,y1,z1,u1,v1,x3,y3,z3,u3,v3 = x3,y3,z3,u3,v3,x1,y1,z1,u1,v1 end
---   if y2>y3 then x2,y2,z2,u2,v2,x3,y3,z3,u3,v3 = x3,y3,z3,u3,v3,x2,y2,z2,u2,v2 end
---   if y1==y3 then return end
-
---   -- precompute reciprocals and uv/z for perspective
---   local w1,w2,w3 = 1/z1, 1/z2, 1/z3
---   local u1w, v1w = u1*w1, v1*w1
---   local u2w, v2w = u2*w2, v2*w2
---   local u3w, v3w = u3*w3, v3*w3
-
---   -- ceil helper
---   local function ceil1(a) local i=flr(a) if a>i then i+=1 end return i end
-
---   -- long edge (1->3) slopes (x, u/z, v/z, 1/z) per y
---   local dy13 = y3-y1
---   local dx13 = (x3-x1)/dy13
---   local du13 = (u3w-u1w)/dy13
---   local dv13 = (v3w-v1w)/dy13
---   local dw13 = (w3-w1)/dy13
-
---   local ystart = ceil1(y1)
---   local yend   = ceil1(y3)-1
---   if ystart>127 or yend<0 then return end
---   if ystart<0 then ystart=0 end
---   if yend>127 then yend=127 end
-
---   -- state on long edge at arbitrary y
---   local function long_at(y)
---     local t=y-y1
---     return x1 + dx13*t,
---            u1w+ du13*t,
---            v1w+ dv13*t,
---            w1 + dw13*t
---   end
-
---   -- draw a band yA..yB using a "short" edge slopes (a->b)
---   local function scan_band(yA,yB, ax,ay,az,auw,avw,aw, bx,by,bz,buw,bvw,bw)
---     if yA>yB then return end
-
---     local dy = by-ay
---     local dxs = (bx-ax)/dy
---     local duw = (buw-auw)/dy
---     local dvw = (bvw-avw)/dy
---     local dww = (bw-aw)/dy
-
---     -- edge states at yA
---     local tA = yA-ay
---     local xs = ax + dxs*tA
---     local us = auw+ duw*tA
---     local vs = avw+ dvw*tA
---     local ws = aw + dww*tA
-
---     local xl,ul,vl,wl = long_at(yA)
-
---     for y=yA,yB do
---       local xr,ur,vr,wr = xs,us,vs,ws
---       local xl2,xr2 = xl,xr
---       local ul2,ur2 = ul,ur
---       local vl2,vr2 = vl,vr
---       local wl2,wr2 = wl,wr
---       if xl2>xr2 then
---         xl2,xr2 = xr2,xl2
---         ul2,ur2 = ur2,ul2
---         vl2,vr2 = vr2,vl2
---         wl2,wr2 = wr2,wl2
---       end
-
---       -- clip horizontally
---       local x0 = max(0, ceil1(xl2))
---       local x1 = min(127, flr(xr2))
---       if x0<=x1 then
---         local span = xr2 - xl2
---         if span > 0 then
---           -- per-x slopes for (u/z, v/z, 1/z)
---           local dux = (ur2-ul2)/span
---           local dvx = (vr2-vl2)/span
---           local dwx = (wr2-wl2)/span
-
---           -- start at x = x0
---           local t = x0 - xl2
---           local uoz = ul2 + dux*t
---           local voz = vl2 + dvx*t
---           local wz  = wl2 + dwx*t
-
---           -- segment in small chunks so tline gets nearly-correct du/dv
---           local x = x0
---           while x<=x1 do
---             local seg = x1 - x + 1
---             if seg>chunk then seg=chunk end
-
---             -- compute correct u,v at both ends of the chunk
---             local u0 = uoz / wz
---             local v0 = voz / wz
-
---             local uoz1 = uoz + dux*seg
---             local voz1 = voz + dvx*seg
---             local wz1  = wz  + dwx*seg
-
---             local u1 = uoz1 / wz1
---             local v1 = voz1 / wz1
-
---             -- per-pixel deltas for this chunk (linear between endpoints)
---             local du = (u1-u0)/seg
---             local dv = (v1-v0)/seg
-
---             -- send to tline (map units are tiles)
---             tline(x, y, x+seg-1, y, mx + u0/8, my + v0/8, du/8, dv/8)
-
---             -- advance chunk state
---             x   += seg
---             uoz += dux*seg
---             voz += dvx*seg
---             wz  += dwx*seg
---           end
---         end
---       end
-
---       -- step one scanline on both edges
---       xs += dxs; us += duw; vs += dvw; ws += dww
---       xl += dx13; ul += du13; vl += dv13; wl += dw13
---     end
---   end
-
---   local y0 = ceil1(y1)
---   local y3i = ceil1(y3)-1
-
---   if y1==y2 then
---     -- flat top: short edge 2->3
---     local yA,yB = y0,y3i
---     scan_band(yA,yB, x2,y2,z2,u2w,v2w,w2,  x3,y3,z3,u3w,v3w,w3)
---     return
---   end
-
---   if y2==y3 then
---     -- flat bottom: short edge 1->2
---     local yA,yB = y0,y3i
---     scan_band(yA,yB, x1,y1,z1,u1w,v1w,w1,  x2,y2,z2,u2w,v2w,w2)
---     return
---   end
-
---   -- general: split at y2
---   local ymid = ceil1(y2)-1
---   if y0<=ymid then
---     scan_band(y0,ymid, x1,y1,z1,u1w,v1w,w1,  x2,y2,z2,u2w,v2w,w2)
---   end
---   local y2s = max(ceil1(y2), y0)
---   if y2s<=y3i then
---     scan_band(y2s,y3i, x2,y2,z2,u2w,v2w,w2, x3,y3,z3,u3w,v3w,w3)
---   end
--- end
-
--- -- perspective-correct textured quad (convex) as two tris
--- -- screen CCW: 1->2->3->4 with (z>0). UV covers the rect (tw*8 x th*8).
--- function qtex_map_persp(
---   x1,y1,z1, x2,y2,z2, x3,y3,z3, x4,y4,z4,
---   mx,my, tw,th, ru,rv, chunk
--- )
---   local wpx,hpx = (tw or 4)*8, (th or 4)*8
---   -- tri A: (1,2,3)
---   tri_tex_persp(
---     x1,y1,z1, 0,0,
---     x2,y2,z2, wpx,0,
---     x3,y3,z3, wpx,hpx,
---     mx,my, tw,th, ru,rv, chunk
---   )
---   -- tri B: (1,3,4)
---   tri_tex_persp(
---     x1,y1,z1, 0,0,
---     x3,y3,z3, wpx,hpx,
---     x4,y4,z4, 0,hpx,
---     mx,my, tw,th, ru,rv, chunk
---   )
--- end
