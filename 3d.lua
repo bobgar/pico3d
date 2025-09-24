@@ -1,4 +1,5 @@
 function _init()
+    zoffset = .15
     level = {}
     sidecolors ={1, 2, 4,  9, 15}
     frontcolors = {12, 14, 9,  10, 7}
@@ -9,17 +10,26 @@ function _init()
     py = 0
     pz = 0
     speed = .1
-    advancespeed = 0.01
+    advancespeed = 0.03
     vx=0
     vy=0
     advance=.05
     damp=.9    
     ontheground = true
     gravity = .5
+    floatvelocity = 1
+    --normalgravity = .5
     maxjumps = 2
     curjumps = 2
     jumpheight = -7
-    --outline=true
+    burstvelocity = .05
+    burstmeter = 30
+    maxburstmeter = 30
+    floatmeter = 30
+    maxfloatmeter = 30
+    --frames per tick of recharge
+    rechargespeed = 16
+    curtick = 0
 
     xstep = 256 / (xsize-1)
     ystep = (128 / (ysize-1))
@@ -47,11 +57,11 @@ function initlevel()
         add(level,{})
         for y=1,ysize do
             add(level[x], {})
-            for z=1,100 do
+            for z=1,200 do
                 add(level[x][y],{})
                 --level[x][y][z] =  y == ysize or y == (flr(-z/3)%ysize)
                 
-                if y == ysize or (rnd() < .05) then 
+                if (y == ysize and z<=10) or (z > 5 and rnd() < .1) then 
                     level[x][y][z] = (x+z) % #sidecolors +1  --((x+z)%10) +1
                 else
                     level[x][y][z] =  0
@@ -62,6 +72,8 @@ function initlevel()
 end
 
 function gameupdate()
+    curtick+=1
+    if curtick > 30000 then curtick = 0 end
     --if btn(⬆️) then vy+= speed  end
     -- if btn(⬇️) then vy-= speed  end
     if btn(➡️) then 
@@ -77,30 +89,35 @@ function gameupdate()
         end
     end
     px = -shipx * .75
-    py = -shipy * .5
+    py = -shipy * .65
     
-    if btnp(⬆️) then advance += advancespeed  end
-    if btnp(⬇️) then advance -= advancespeed  end
+    --if btnp(⬆️) then advance += advancespeed  end
+    --if btnp(⬇️) then advance -= advancespeed  end
     
-    if btnp(❎ ) and curjumps>0 then vy = jumpheight curjumps-=1 end
-    
-    -- px+=vx
+    if btnp(❎) and curjumps>0 then vy = jumpheight curjumps-=1 end        
+    if btn(❎) and vy > 0 and floatmeter > 0 then floatmeter-=1 vy = floatvelocity end
+    if btn(🅾️) and burstmeter > 0 then burstmeter -= 1 pz+=advance + burstvelocity vy = 0 end
+
     shipy+=vy
-    -- vx*=damp
     pz+=advance
+
+    if curtick % rechargespeed == 0 then 
+        if burstmeter < maxburstmeter then burstmeter +=1 end 
+        if floatmeter < maxfloatmeter then floatmeter +=1 end 
+    end
     
     checkcollisions()
 end
 
-function checkcollisionwithallpoints(x,y,z)    
+function checkcollisionwithallpoints(x,y,z, scale)    
     for shippoint in all(playerpoints) do
-        local ix = (shippoint.x + x) / xstep
-        local iy = (shippoint.y-60 + y) / ystep
-        local iz = (shippoint.z-1 + z) / zstep
+        local ix = (shippoint.x*scale + x) / xstep
+        local iy = ((shippoint.y-60)*scale + y) / ystep
+        local iz = ((shippoint.z-1)*scale + z) / zstep
         
         --Make sure we're in bounds.  Not sure whether to count this as true or false, but for now true.
-        if ix<=0 or ix > xsize or iy > ysize or iz<=0 or iz > 100  then return true end
-        if iy<=0  then return false end        
+        if ix<=0 or ix > xsize or iy > ysize or iz > 100  then return true end
+        if iz<=0 or iy<=0  then return false end        
 
         --printh("ix: " .. ix .. "  iy: " .. iy .. "  iz: " .. iz .. "  cell value: " ..  level[ceil(ix)][ceil(iy)][ceil(iz)])-- .. "  cell  " .. level[ceil(ix)][ceil(ny)][ceil(iz)] )
 
@@ -119,13 +136,15 @@ function checkcollisions()
     local nz = (shipz + pz + advance) / zstep
 
     --printh("ix: " .. ceil(ix) .. "  ny: " .. ceil(ny) .. "  iz: " .. ceil(iz))-- .. "  cell  " .. level[ceil(ix)][ceil(ny)][ceil(iz)] )
+
     --if we're below the bottom of the screen, crash
     if ny >=5 then
+        printh("fall through the ground crash")
         crash()
     -- If there is ground in the next space we'd go to 
-    elseif checkcollisionwithallpoints(shipx + xstep * 2.5, (shipy+vy+gravity + ystep * 4), shipz + pz) then
+    elseif checkcollisionwithallpoints(shipx + xstep * 2.5, (shipy+vy+gravity + ystep * 4), shipz + pz + zoffset, 1) then
         -- if we're still going up, were jumping into a block so crash
-        if vy < 0 then crash() return end
+        if vy < -.01 then crash() printh("jump crash") return end
         --Otherwise, we're on ground.  reset max jumps and set y velocity to 0
         vy = 0
         ontheground = true
@@ -135,18 +154,28 @@ function checkcollisions()
         vy += gravity
         ontheground = false
     end
-
-    --if level[ceil(ix)] and level[ceil(ix)][ceil(iy)] and level[ceil(ix)][ceil(iy)][ceil(nz)] != 0 then
-    if checkcollisionwithallpoints(shipx + xstep * 2.5, shipy + ystep * 4, shipz + pz) then
+    
+    
+    if checkcollisionwithallpoints(shipx + xstep * 2.5, shipy + ystep * 4 -3, shipz + pz + zoffset, .8) then
+        printh("collision crash")
         crash()
     end
+
 end
 
 function crash()
-    restartcounter=60
-    _update60 = function() restartcounter-=1 if restartcounter<=0 then _init() end end
-    _draw = nil
-    print("YOU CRASHED")
+    restartcounter=120
+    _update60 = function() 
+         p = (120.0-restartcounter) / 60.0
+        restartcounter-=1 sspr(0, 64,64, 64, max(64 - 64*p, 0),max(64 - 64*p, 0),min(128,128*p),min(128*p,128))   
+        if 
+            restartcounter <= 0
+        then 
+            _init() 
+        end 
+        drawui()
+    end 
+    _draw = nil    
 end
 
 function gamedraw()
@@ -181,14 +210,30 @@ function gamedraw()
         end
     end
     
-    --right now always draw the player last (may change)
     if iy <= 0 then
         drawplayer()
     end
 
+    drawui()
+end
+
+function drawui()
+
+    drawbar(3,3, floatmeter, maxfloatmeter,  12, 1)
+    drawbar(3,8, burstmeter, maxburstmeter,  10, 9)
+
+    local text = "dist: " .. flr(pz)
+    print(text,128 - #text * 4, 0, 1)
+    print(text,127 - #text * 4, 1, 15)
+
     color(0)
-    print("FPS: " .. stat(7), 80,100)
-    print("CPU: " .. stat(1), 80,108)
+    --print("FPS: " .. stat(7), 80,100)
+    --print("CPU: " .. stat(1), 80,108)
+end
+
+function drawbar(x, y, cur,max,  c1,c2)
+    rectfill(x,y,x+max,y+3,c2)
+    rectfill(x,y,x+cur,y+3,c1)
 end
 
 function drawbox()
@@ -204,14 +249,15 @@ function drawbox()
     local px3 = cx / (cz+zstep*zdist) +64
     local px4 = (cx+xstep*xsize) / (cz+zstep*zdist) +64
 
-    local py1 = cy / cz + 64
+    local py1 = (cy-ystep*3) / cz + 64
     local py2 = (cy+ystep*ysize) / cz + 64 
-    local py3 = cy / (cz+zstep*zdist) + 64
+    local py3 = (cy-ystep*3) / (cz+zstep*zdist) + 64
     local py4 = (cy+ystep*ysize) / (cz+zstep*zdist) + 64  
 
     --qfill_ccw(px2, py1, px4, py3, px3, py3, px1, py1)    
     rectfill(0, 0, 128, py3, 5) 
-    rectfill(px3, py3, px4, py4, 0) 
+    rectfill(0, py3, 128, 128, 0) 
+    --rectfill(px3, py3, px4, py4, 0) 
 
     color(6)
     qfill_ccw(px2, py1, px4, py3, px4, py4, px2, py2)
