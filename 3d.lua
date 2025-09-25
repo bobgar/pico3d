@@ -49,11 +49,13 @@ function gameinit()
         {x=0, y=60, z=1.5},
     }
     bottompoints = {playerpoints[1], playerpoints[2], playerpoints[4]}
-    centerpoint = { 
-        x= (bottompoints[1].x + bottompoints[2].x + bottompoints[3].x)/3.0,
-        y= (bottompoints[1].y + bottompoints[2].y + bottompoints[3].y)/3.0,
-        z= (bottompoints[1].z + bottompoints[2].z + bottompoints[3].z)/3.0
-    } 
+    --NOTE not actually the center point now, but the most useful one to cast shadows from.
+    centerpoint = {x=0, y=60, z=1.35}
+    -- centerpoint = { 
+    --     x= (bottompoints[1].x + bottompoints[2].x + bottompoints[3].x)/3.0,
+    --     y= (bottompoints[1].y + bottompoints[2].y + bottompoints[3].y)/3.0,
+    --     z= (bottompoints[1].z + bottompoints[2].z + bottompoints[3].z)/3.0
+    -- } 
     _update60 = gameupdate
     _draw = gamedraw
 end
