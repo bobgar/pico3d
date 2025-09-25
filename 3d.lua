@@ -48,6 +48,12 @@ function gameinit()
         {x=0, y=50, z=1},
         {x=0, y=60, z=1.5},
     }
+    bottompoints = {playerpoints[1], playerpoints[2], playerpoints[4]}
+    centerpoint = { 
+        x= (bottompoints[1].x + bottompoints[2].x + bottompoints[3].x)/3.0,
+        y= (bottompoints[1].y + bottompoints[2].y + bottompoints[3].y)/3.0,
+        z= (bottompoints[1].z + bottompoints[2].z + bottompoints[3].z)/3.0
+    } 
     _update60 = gameupdate
     _draw = gamedraw
 end
@@ -89,7 +95,8 @@ function gameupdate()
         end
     end
     px = -shipx * .75
-    py = -shipy * .65
+    --py = -shipy * .65
+    py = -shipy * .5
     
     --if btnp(⬆️) then advance += advancespeed  end
     --if btnp(⬇️) then advance -= advancespeed  end
@@ -127,13 +134,7 @@ function checkcollisionwithallpoints(x,y,z, scale)
 end
 
 function checkcollisions()
-    --printh("x: " .. shipx .. "  y: " .. shipy .. "  z: " .. shipz)
-    local ix = (shipx + xstep * 2.5) / xstep
-    local iy = (shipy + ystep * 4) / ystep
-    local iz = (shipz + pz) / zstep
-    
     local ny = (shipy+vy+gravity + ystep * 4) / ystep
-    local nz = (shipz + pz + advance) / zstep
 
     --printh("ix: " .. ceil(ix) .. "  ny: " .. ceil(ny) .. "  iz: " .. ceil(iz))-- .. "  cell  " .. level[ceil(ix)][ceil(ny)][ceil(iz)] )
 
@@ -356,6 +357,8 @@ end
 
 function drawplayer()
     
+    drawshadow()
+
     local p1x = (playerpoints[1].x+shipx + px) / playerpoints[1].z + 64
     local p1y = (playerpoints[1].y+shipy + py) / playerpoints[1].z + 64
     local p2x = (playerpoints[2].x+shipx + px) / playerpoints[2].z + 64
@@ -373,4 +376,50 @@ function drawplayer()
     color(11)
     --back
     tri_ultra(p1x, p1y , p2x,p2y, p3x,p3y)
+
+end
+
+function drawshadow()
+    local yhits={}
+    local ind = 1
+
+    --for p in all(bottompoints) do
+    local p = centerpoint
+        local ix = ceil((shipx + p.x + xstep * 2.5) / xstep)
+        local iy = ceil((shipy + (p.y-60) + ystep * 4) / ystep)
+        local iz = ceil((shipz + (p.z-1) + pz) / zstep)
+        add(yhits, nil)
+        if iy < 1 then iy = 1 end
+        for cury=iy,ysize,1 do
+            --printh("ix: " .. ix .. "  iy: " .. iy .. "  iz: " .. iz)-- .. "  cell value: " ..  level[ceil(ix)][ceil(iy)][ceil(iz)])
+            if level[ix][cury][iz] != 0 then
+                yhits[ind] = cury
+                break           
+            end
+        end
+        ind+=1
+    --end
+
+    local min = yhits[1]
+    -- if min == nil or (yhits[2] != nil and yhits[2] < min) then min = yhits[2] end
+    -- if min == nil or (yhits[3] != nil and yhits[3] < min) then min = yhits[3] end
+
+    --TODO right now we take a naive approach, find the highest collision under the player and use that for where to draw the triangle
+    --We do no clipping so the shadow often overhangs the block, which looks weird.  Ideally I would intersect and calculate the sub-traingles
+    --to draw, and draw peices at different layers, but for the purposes of this game the current implementation is probably fine.
+    if min != nil then
+        dy = ((- 1 / ((shipy + (bottompoints[1].y-60) + ystep * 4) / ystep - min)) - 1) * .5 + 1
+        printh(dy)
+        -- In this case we can draw the whole dropshadow on the same rect.        
+        local cy = ((min-1) / (ysize-1)) * 128 - 64 -4
+        local p1x = (bottompoints[1].x*dy+shipx + px) / bottompoints[1].z + 64
+        local p1y = (cy+py) / ((bottompoints[1].z-1)*dy+1) + 64
+        local p2x = (bottompoints[2].x*dy+shipx + px) / bottompoints[2].z + 64
+        local p2y = (cy+py) / ((bottompoints[2].z-1)*dy+1) + 64
+        local p3x = (bottompoints[3].x*dy +shipx + px) / bottompoints[3].z + 64
+        local p3y = (cy+py) / ((bottompoints[3].z-1)*dy+1) + 64
+        color(0)
+        --printh("px: " .. p1x .. "  py: " .. p2y .. "px: " .. p2x .. "  py: " .. p1y .. "px: " .. p3x .. "  py: " .. p3y )
+        tri_ultra(p1x, p1y , p2x,p2y, p3x,p3y)
+    end
 end
