@@ -1,4 +1,4 @@
-function _init()
+function gameinit()
     zoffset = .15
     level = {}
     sidecolors ={1, 2, 4,  9, 15}
@@ -34,7 +34,7 @@ function _init()
     xstep = 256 / (xsize-1)
     ystep = (128 / (ysize-1))
     zstep = 1
-
+    
     initlevel()
 
     --copy_sprites_to_map(1,0, 8, 4, 0, 0)
@@ -171,7 +171,7 @@ function crash()
         if 
             restartcounter <= 0
         then 
-            _init() 
+            gameinit() 
         end 
         drawui()
     end 
@@ -225,6 +225,12 @@ function drawui()
     local text = "dist: " .. flr(pz)
     print(text,128 - #text * 4, 0, 1)
     print(text,127 - #text * 4, 1, 15)
+
+    if flr(pz) > maxdist then maxdist = flr(pz) end
+
+    local max = "max: " .. maxdist
+    print(max,128 - #max * 4, 10, 1)
+    print(max,127 - #max * 4, 11, 15)
 
     color(0)
     --print("FPS: " .. stat(7), 80,100)
