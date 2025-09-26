@@ -5,7 +5,7 @@ function gameinit()
     frontcolors = {12, 14, 9,  10, 7}
     xsize = 5
     ysize = 5
-    zdist = 8
+    zdist = 12
     px = 0
     py = 0
     pz = 0
@@ -98,7 +98,7 @@ function gameupdate()
     end
     px = -shipx * .75
     --py = -shipy * .65
-    py = -shipy * .5
+    py = -shipy * .75
     
     --if btnp(⬆️) then advance += advancespeed  end
     --if btnp(⬇️) then advance -= advancespeed  end
@@ -125,7 +125,7 @@ function checkcollisionwithallpoints(x,y,z, scale)
         local iz = ((shippoint.z-1)*scale + z) / zstep
         
         --Make sure we're in bounds.  Not sure whether to count this as true or false, but for now true.
-        if ix<=0 or ix > xsize or iy > ysize or iz > 100  then return true end
+        if ix<=0 or ix > xsize or iy > ysize or iz > 200  then return true end
         if iz<=0 or iy<=0  then return false end        
 
         --printh("ix: " .. ix .. "  iy: " .. iy .. "  iz: " .. iz .. "  cell value: " ..  level[ceil(ix)][ceil(iy)][ceil(iz)])-- .. "  cell  " .. level[ceil(ix)][ceil(ny)][ceil(iz)] )
@@ -236,8 +236,8 @@ function drawui()
     print(max,127 - #max * 4, 11, 15)
 
     color(0)
-    --print("FPS: " .. stat(7), 80,100)
-    --print("CPU: " .. stat(1), 80,108)
+    print("FPS: " .. stat(7), 80,100)
+    print("CPU: " .. stat(1), 80,108)
 end
 
 function drawbar(x, y, cur,max,  c1,c2)
@@ -411,7 +411,7 @@ function drawshadow()
     --to draw, and draw peices at different layers, but for the purposes of this game the current implementation is probably fine.
     if min != nil then
         dy = ((- 1 / ((shipy + (bottompoints[1].y-60) + ystep * 4) / ystep - min)) - 1) * .5 + 1
-        printh(dy)
+        --printh(dy)
         -- In this case we can draw the whole dropshadow on the same rect.        
         local cy = ((min-1) / (ysize-1)) * 128 - 64 -4
         local p1x = (bottompoints[1].x*dy+shipx + px) / bottompoints[1].z + 64
