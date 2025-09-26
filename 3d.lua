@@ -48,11 +48,13 @@ function gameinit()
         {x=0, y=50, z=1},
         {x=0, y=60, z=1.5},
     }
+
+    add(playerpoints, {        
+        x= (playerpoints[1].x + playerpoints[2].x + playerpoints[4].x)/3.0,
+        y= (playerpoints[1].y + playerpoints[2].y + playerpoints[4].y)/3.0,
+        z= (playerpoints[1].z + playerpoints[2].z + playerpoints[4].z)/3.0})
+
     bottompoints = {playerpoints[1], playerpoints[2], playerpoints[4]}
-    add(bottompoints, {        
-        x= (bottompoints[1].x + bottompoints[2].x + bottompoints[3].x)/3.0,
-        y= (bottompoints[1].y + bottompoints[2].y + bottompoints[3].y)/3.0,
-        z= (bottompoints[1].z + bottompoints[2].z + bottompoints[3].z)/3.0})
     --NOTE not actually the center point now, but the most useful one to cast shadows from.
     centerpoint = {x=0, y=60, z=1.35}
     _update60 = gameupdate
@@ -178,7 +180,7 @@ function checkcollisions()
         printh("fall through the ground crash")
         crash()
     -- If there is ground in the next space we'd go to 
-    elseif checkcollisionwithallpoints(shipx + xstep * 2.5, (shipy+vy+gravity + ystep * 4), shipz + pz%zstep + zoffset, 1) then
+    elseif checkcollisionwithallpoints(shipx + xstep * 2.5, (shipy+vy+gravity + ystep * 4), shipz + pz%zstep, 1) then
         -- if we're still going up, were jumping into a block so crash
         if vy < -.01 then crash() printh("jump crash") return end
         --Otherwise, we're on ground.  reset max jumps and set y velocity to 0
@@ -191,7 +193,7 @@ function checkcollisions()
         ontheground = false
     end
 
-    if checkcollisionwithallpoints(shipx + xstep * 2.5, shipy+ ystep * 4-12, shipz + pz%zstep + zoffset, 1) then
+    if checkcollisionwithallpoints(shipx + xstep * 2.5, shipy+ ystep * 4-15, shipz + pz%zstep + zoffset, 1) then
         printh("collision crash")
         crash()
     end
