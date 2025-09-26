@@ -49,23 +49,22 @@ function gameinit()
         {x=0, y=60, z=1.5},
     }
     bottompoints = {playerpoints[1], playerpoints[2], playerpoints[4]}
+    add(bottompoints, {        
+        x= (bottompoints[1].x + bottompoints[2].x + bottompoints[3].x)/3.0,
+        y= (bottompoints[1].y + bottompoints[2].y + bottompoints[3].y)/3.0,
+        z= (bottompoints[1].z + bottompoints[2].z + bottompoints[3].z)/3.0})
     --NOTE not actually the center point now, but the most useful one to cast shadows from.
     centerpoint = {x=0, y=60, z=1.35}
-    -- centerpoint = { 
-    --     x= (bottompoints[1].x + bottompoints[2].x + bottompoints[3].x)/3.0,
-    --     y= (bottompoints[1].y + bottompoints[2].y + bottompoints[3].y)/3.0,
-    --     z= (bottompoints[1].z + bottompoints[2].z + bottompoints[3].z)/3.0
-    -- } 
     _update60 = gameupdate
     _draw = gamedraw
 end
 
-function initlevel()
-    for x=1,xsize do
-        add(level,{})
-        for y=1,ysize do
-            add(level[x], {})
-            for z=1,200 do
+function initlevel()    
+    for z=1,zdist do
+        for x=1,xsize do
+            add(level,{})
+            for y=1,ysize do
+                add(level[x], {})
                 add(level[x][y],{})
                 --level[x][y][z] =  y == ysize or y == (flr(-z/3)%ysize)
                 
@@ -75,6 +74,32 @@ function initlevel()
                     level[x][y][z] =  0
                 end 
             end
+        end
+    end
+end
+
+function copyback()
+    for z=2,zdist do
+        for x=1,xsize do
+            for y=1,ysize do
+                level[x][y][z-1] = level[x][y][z]
+            end
+        end
+    end
+end
+
+function generateNewSlice(z)
+    for x=1,xsize do
+        for y=1,ysize do
+            add(level[x], {})
+            add(level[x][y],{})
+            --level[x][y][z] =  y == ysize or y == (flr(-z/3)%ysize)
+            
+            if (y == ysize and z<=10) or (z > 5 and rnd() < .1) then 
+                level[x][y][z] = (x+z) % #sidecolors +1  --((x+z)%10) +1
+            else
+                level[x][y][z] =  0
+            end 
         end
     end
 end
@@ -103,12 +128,20 @@ function gameupdate()
     --if btnp(⬆️) then advance += advancespeed  end
     --if btnp(⬇️) then advance -= advancespeed  end
     
+    local oiz = flr(pz / zstep)
+
     if btnp(❎) and curjumps>0 then vy = jumpheight curjumps-=1 end        
     if btn(❎) and vy > 0 and floatmeter > 0 then floatmeter-=1 vy = floatvelocity end
     if btn(🅾️) and burstmeter > 0 then burstmeter -= 1 pz+=advance + burstvelocity vy = 0 end
 
     shipy+=vy
     pz+=advance
+
+    local niz = flr(pz / zstep)
+    if(oiz != niz) then 
+        copyback()
+        generateNewSlice(zdist)
+    end
 
     if curtick % rechargespeed == 0 then 
         if burstmeter < maxburstmeter then burstmeter +=1 end 
@@ -122,10 +155,10 @@ function checkcollisionwithallpoints(x,y,z, scale)
     for shippoint in all(playerpoints) do
         local ix = (shippoint.x*scale + x) / xstep
         local iy = ((shippoint.y-60)*scale + y) / ystep
-        local iz = ((shippoint.z-1)*scale + z) / zstep
+        local iz = ((shippoint.z-1)*scale + z%zstep) / zstep
         
         --Make sure we're in bounds.  Not sure whether to count this as true or false, but for now true.
-        if ix<=0 or ix > xsize or iy > ysize or iz > 200  then return true end
+        if iy > ysize then return true end
         if iz<=0 or iy<=0  then return false end        
 
         --printh("ix: " .. ix .. "  iy: " .. iy .. "  iz: " .. iz .. "  cell value: " ..  level[ceil(ix)][ceil(iy)][ceil(iz)])-- .. "  cell  " .. level[ceil(ix)][ceil(ny)][ceil(iz)] )
@@ -145,7 +178,7 @@ function checkcollisions()
         printh("fall through the ground crash")
         crash()
     -- If there is ground in the next space we'd go to 
-    elseif checkcollisionwithallpoints(shipx + xstep * 2.5, (shipy+vy+gravity + ystep * 4), shipz + pz + zoffset, 1) then
+    elseif checkcollisionwithallpoints(shipx + xstep * 2.5, (shipy+vy+gravity + ystep * 4), shipz + pz%zstep + zoffset, 1) then
         -- if we're still going up, were jumping into a block so crash
         if vy < -.01 then crash() printh("jump crash") return end
         --Otherwise, we're on ground.  reset max jumps and set y velocity to 0
@@ -157,13 +190,11 @@ function checkcollisions()
         vy += gravity
         ontheground = false
     end
-    
-    
-    if checkcollisionwithallpoints(shipx + xstep * 2.5, shipy + ystep * 4 -3, shipz + pz + zoffset, .8) then
+
+    if checkcollisionwithallpoints(shipx + xstep * 2.5, shipy+ ystep * 4-12, shipz + pz%zstep + zoffset, 1) then
         printh("collision crash")
         crash()
     end
-
 end
 
 function crash()
@@ -184,13 +215,13 @@ end
 function gamedraw()
     local ix = ceil( (shipx + xstep * 2.5) / xstep)
     local iy = ceil( (shipy + ystep * 4) / ystep)
-    local iz = ceil( (shipz + pz) / zstep)
+    local iz = 1-- ceil( (shipz + pz) / zstep)
 
     --printh("ix: " .. ix .. "  iy: " .. iy .. "  iz: " .. iz .. "  cell value: " ..  level[ceil(ix)][ceil(iy)][ceil(iz)])
 
     drawbox()
 
-    for z=flr(pz+zdist),flr(pz-1), -1.0 do
+    for z=zdist,1, -1.0 do
         for y=ysize,1,-1 do
             for x=1,xsize do
                 if level[x][y][z] != 0 then
@@ -281,7 +312,7 @@ function drawbox()
 end
 
 function drawcubefronts(x,y,iz, c)
-    local z = iz - pz
+    local z = iz - pz%zstep
 
     local cz = z * zstep
     if cz < 0 then return end
@@ -308,7 +339,7 @@ function drawcubefronts(x,y,iz, c)
 end
 
 function drawcubemids(x,y,iz, c)
-    local z = iz - pz
+    local z = iz - pz%zstep
 
     local cz = z * zstep
     if cz < 0 then return end
@@ -389,10 +420,10 @@ function drawshadow()
     local p = centerpoint
         local ix = ceil((shipx + p.x + xstep * 2.5) / xstep)
         local iy = ceil((shipy + (p.y-60) + ystep * 4) / ystep)
-        local iz = ceil((shipz + (p.z-1) + pz) / zstep)
+        local iz = ceil((shipz + (p.z-1) + pz%zstep ) / zstep)
         add(yhits, nil)
-        if iy < 1 then iy = 1 end
-        for cury=iy,ysize,1 do
+        if iy < 0 then iy = 0 end
+        for cury=iy+1,ysize,1 do
             --printh("ix: " .. ix .. "  iy: " .. iy .. "  iz: " .. iz)-- .. "  cell value: " ..  level[ceil(ix)][ceil(iy)][ceil(iz)])
             if level[ix][cury][iz] != 0 then
                 yhits[ind] = cury
