@@ -404,3 +404,7 @@ function qtex_map_persp_fast(
     mx,my, tw,th, ru,rv, chunk_max, eps, uofs, vofs
   )
 end
+
+function printcentered(text, y)
+	print(text, 64 - #text*2, y)
+end

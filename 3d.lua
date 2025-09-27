@@ -269,8 +269,8 @@ function drawui()
     print(max,127 - #max * 4, 11, 15)
 
     color(0)
-    print("FPS: " .. stat(7), 80,100)
-    print("CPU: " .. stat(1), 80,108)
+    --print("FPS: " .. stat(7), 80,100)
+    --print("CPU: " .. stat(1), 80,108)
 end
 
 function drawbar(x, y, cur,max,  c1,c2)
